@@ -37,6 +37,9 @@
   .legend.off{opacity:.4}
   .li{display:flex;align-items:center;gap:8px;line-height:1.25}
   .sw{width:22px;height:14px;border:1px solid #232323;flex:none;border-radius:2px}
+  .lg-grp{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:4px}
+  .li .ha{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;padding-left:8px}
+  .cob{image-rendering:pixelated;image-rendering:crisp-edges}
   .sw.line{height:0;border:0;border-top:3px solid #ff3333;border-radius:0}
   .sw.circ{width:18px;height:18px;border-radius:50%;background:rgba(20,20,20,.72);border:1.5px solid #fff;
     box-shadow:0 0 0 1px #000;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:600}
@@ -81,7 +84,7 @@
 <div id="map"></div>
 <header>
   <h1>Malagueño · Mapas territoriales</h1>
-  <p>Parcelas, uso del suelo actual y usos del suelo IPLAM</p>
+  <p>Parcelas, uso del suelo actual, usos del suelo IPLAM y cobertura 2024–2025</p>
 </header>
 
 <div id="panel">
@@ -102,6 +105,12 @@
       <label class="maprow"><input type="checkbox" data-map="m3">
         <div><div class="t">3 · Usos del suelo IPLAM</div><div class="s">Plan Metropolitano de Córdoba</div></div></label>
       <div class="legend off" id="lg-m3"></div>
+    </div>
+    <div class="sec">
+      <label class="maprow"><input type="checkbox" data-map="m4">
+        <div><div class="t">4 · Cobertura y uso actual del suelo 2024–2025</div><div class="s">IDECOR · ráster de 10 m · superficie dentro del radio urbano</div></div></label>
+      <div class="legend off" id="lg-m4"></div>
+      <div class="note">Fuente: Mapa de Cobertura y Uso del Suelo de la Provincia de Córdoba 2024–2025 (IDECOR). Tocá el mapa para ver la clase.</div>
     </div>
     <div class="sec">
       <div class="legend" style="margin-left:0">
@@ -150,6 +159,30 @@ const C = {
     'agropecuaria_cat_1':       ['#5f9add','Agropecuaria categoría 1'],
     'agropecuaria_cat_2':       ['#e4830d','Agropecuaria categoría 2'],
     'natural_protegida':        ['#e02a21','Natural protegida']
+  },
+  // Cobertura y uso del suelo 2024-2025 (IDECOR): código de píxel -> [color, clase, macroclase]
+  cobertura: {
+    1:  ['#2f6b2a','Monte','Coberturas naturales'],
+    2:  ['#7aa33b','Matorral','Coberturas naturales'],
+    3:  ['#c9d77a','Pastizal natural','Coberturas naturales'],
+    4:  ['#9cb59a','Matorral halófilo','Coberturas naturales'],
+    5:  ['#8c8279','Roca','Baja cobertura vegetal'],
+    6:  ['#d9c29a','Suelo desnudo','Baja cobertura vegetal'],
+    7:  ['#f2efe6','Salina','Baja cobertura vegetal'],
+    8:  ['#1f5fbf','Cuerpo de agua','Coberturas hídricas'],
+    9:  ['#6fa8dc','Cuerpo de agua estacional','Coberturas hídricas'],
+    10: ['#2b9bd6','Curso de agua','Coberturas hídricas'],
+    11: ['#7f0000','Urbano compacidad alta','Coberturas antrópicas'],
+    12: ['#c0281f','Urbano compacidad media','Coberturas antrópicas'],
+    13: ['#e8603c','Urbano compacidad baja','Coberturas antrópicas'],
+    14: ['#f4a582','Urbano compacidad muy baja o edificación dispersa','Coberturas antrópicas'],
+    15: ['#4d4d4d','Infraestructura vial y ferroviaria','Coberturas antrópicas'],
+    16: ['#f2d13a','Cultivo extensivo anual','Sistemas agropecuarios y forestales'],
+    17: ['#c9a227','Cultivo anual irrigado','Sistemas agropecuarios y forestales'],
+    18: ['#a6d96a','Pastura implantada','Sistemas agropecuarios y forestales'],
+    19: ['#d4e88c','Pastura manejada','Sistemas agropecuarios y forestales'],
+    20: ['#b35806','Cultivo hortícola multiespecífico','Sistemas agropecuarios y forestales'],
+    21: ['#5b3a8c','Plantación leñosa comercial','Sistemas agropecuarios y forestales']
   }
 };
 
@@ -179,7 +212,7 @@ Object.keys(bases).forEach((k, i) => {
 L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
 
 // Panes para ordenar los mapas (IPLAM abajo, parcelas arriba, radio urbano encima de todo)
-[['m3', 410], ['m2', 420], ['m1', 430], ['radio', 450], ['labels', 460]].forEach(([n, z]) => {
+[['m4', 405], ['m3', 410], ['m2', 420], ['m1', 430], ['radio', 450], ['labels', 460]].forEach(([n, z]) => {
   map.createPane(n).style.zIndex = z;
 });
 map.getPane('labels').style.pointerEvents = 'none';
@@ -210,15 +243,15 @@ document.getElementById('lg-m2').innerHTML = Object.values(C.actual).map(([c, l]
 document.getElementById('lg-m3').innerHTML = Object.values(C.iplam).map(([c, l]) => sw(c, l)).join('');
 
 // ------------------------------------------------------------------ Capas
-const grupos = {m1: L.layerGroup(), m2: L.layerGroup(), m3: L.layerGroup()};
+const grupos = {m1: L.layerGroup(), m2: L.layerGroup(), m3: L.layerGroup(), m4: L.layerGroup()};
 let parcelas = [], manzanas = [];
 const etiquetas = L.layerGroup().addTo(map);
 
 Promise.all([
   getJSON('data/radio_urbano.geojson'), getJSON('data/parcelas.geojson'), getJSON('data/manzanas.geojson'),
   getJSON('data/canteras.geojson'), getJSON('data/anp.geojson'), getJSON('data/residencial.geojson'),
-  getJSON('data/industria.geojson'), getJSON('data/iplam.geojson')
-]).then(([radio, parc, mz, cant, anp, resid, ind, iplam]) => {
+  getJSON('data/industria.geojson'), getJSON('data/iplam.geojson'), getJSON('data/cobertura_2024_2025.json')
+]).then(([radio, parc, mz, cant, anp, resid, ind, iplam, cob]) => {
 
   // Radio urbano: siempre visible, en todos los mapas
   const radioLy = L.geoJSON(radio, {pane: 'radio', style: {renderer, color: '#ff3333', weight: 2.5, fill: false},
@@ -279,6 +312,46 @@ Promise.all([
       ['Categoría IPLAM', fmt(p.Categoria)],
       ['Superficie', fmt(p.Superficie, 2)],
       ['Descripción', fmt(p.Descripcio), 'desc']])); }}).addTo(grupos.m3);
+
+  // ---- Mapa 4: cobertura y uso actual del suelo 2024-2025 (ráster IDECOR reproyectado a Web Mercator)
+  const fmtHa = v => v.toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' ha';
+  const presentes = Object.keys(cob.stats).map(Number).sort((a, b) => a - b);
+  let grp = '', html = '';
+  presentes.forEach(k => {
+    const [col, lab, mac] = C.cobertura[k];
+    if (mac !== grp) { html += `<div class="lg-grp">${mac}</div>`; grp = mac; }
+    html += `<div class="li"><span class="sw" style="background:${col}"></span>${lab}<span class="ha">${fmtHa(cob.stats[k].ha_radio)}</span></div>`;
+  });
+  document.getElementById('lg-m4').innerHTML = html;
+  const cobImg = L.imageOverlay('data/cobertura_2024_2025.png', cob.bounds,
+    {pane: 'm4', opacity: 0.78, interactive: true, className: 'cob'}).addTo(grupos.m4);
+  // Lectura del código de clase al tocar: se lee el píxel de la imagen (paleta -> clase)
+  const porColor = {};
+  Object.entries(C.cobertura).forEach(([k, v]) => { porColor[v[0].toLowerCase()] = +k; });
+  let pix = null;
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+    const cx = cv.getContext('2d', {willReadFrequently: true}); cx.drawImage(img, 0, 0); pix = cx;
+  };
+  img.src = 'data/cobertura_2024_2025.png';
+  const pMerc = ll => L.CRS.EPSG3857.project(ll);
+  const nw = pMerc(L.latLng(cob.bounds[1][0], cob.bounds[0][1])), se = pMerc(L.latLng(cob.bounds[0][0], cob.bounds[1][1]));
+  cobImg.on('click', e => {
+    if (!pix) return;
+    const p = pMerc(e.latlng);
+    const x = Math.floor((p.x - nw.x) / (se.x - nw.x) * cob.size[0]);
+    const y = Math.floor((nw.y - p.y) / (nw.y - se.y) * cob.size[1]);
+    const d = pix.getImageData(x, y, 1, 1).data;
+    if (!d[3]) return;
+    const hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    const k = porColor[hex]; if (!k) return;
+    const [, lab, mac] = C.cobertura[k];
+    L.popup().setLatLng(e.latlng).setContent(popup(lab, [
+      ['Macroclase', mac], ['Código IDECOR', k],
+      ['Superficie en el radio urbano', fmtHa(cob.stats[k].ha_radio)],
+      ['Fuente', 'IDECOR 2024–2025 (10 m)']])).openOn(map);
+  });
 
   // Encuadre inicial al radio urbano
   map.fitBounds(radioLy.getBounds(), {padding: [20, 20]});
