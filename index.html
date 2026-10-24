@@ -38,7 +38,7 @@
   .li{display:flex;align-items:center;gap:8px;line-height:1.25}
   .sw{width:22px;height:14px;border:1px solid #232323;flex:none;border-radius:2px}
   .lg-grp{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:4px}
-  .li .ha{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;padding-left:8px}
+  .li .ha{margin-left:auto;white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;padding-left:8px}
   .cob{image-rendering:pixelated;image-rendering:crisp-edges}
   .sw.line{height:0;border:0;border-top:3px solid #ff3333;border-radius:0}
   .sw.circ{width:18px;height:18px;border-radius:50%;background:rgba(20,20,20,.72);border:1.5px solid #fff;
@@ -84,7 +84,7 @@
 <div id="map"></div>
 <header>
   <h1>Malagueño · Mapas territoriales</h1>
-  <p>Parcelas, uso del suelo actual, usos del suelo IPLAM y cobertura 2024–2025</p>
+  <p>Parcelas, usos del suelo IPLAM y cobertura y uso actual del suelo 2024–2025</p>
 </header>
 
 <div id="panel">
@@ -94,21 +94,15 @@
       <label class="maprow"><input type="checkbox" data-map="m1" checked>
         <div><div class="t">1 · Parcelas</div><div class="s">Estado de edificación (catastro)</div></div></label>
       <div class="legend" id="lg-m1"></div>
-      <div class="note">Número de parcela desde escala 1:2.500; más alejado, sólo el número de manzana.</div>
-    </div>
-    <div class="sec">
-      <label class="maprow"><input type="checkbox" data-map="m2">
-        <div><div class="t">2 · Uso del suelo actual</div><div class="s">Canteras, ANP, industria y urbanizado</div></div></label>
-      <div class="legend off" id="lg-m2"></div>
     </div>
     <div class="sec">
       <label class="maprow"><input type="checkbox" data-map="m3">
-        <div><div class="t">3 · Usos del suelo IPLAM</div><div class="s">Plan Metropolitano de Córdoba</div></div></label>
+        <div><div class="t">2 · Usos del suelo IPLAM</div><div class="s">Plan Metropolitano de Córdoba</div></div></label>
       <div class="legend off" id="lg-m3"></div>
     </div>
     <div class="sec">
       <label class="maprow"><input type="checkbox" data-map="m4">
-        <div><div class="t">4 · Cobertura y uso actual del suelo 2024–2025</div><div class="s">IDECOR · ráster de 10 m · superficie dentro del radio urbano</div></div></label>
+        <div><div class="t">3 · Cobertura y uso actual del suelo 2024–2025</div><div class="s">IDECOR · ráster de 10 m · superficie dentro del radio urbano</div></div></label>
       <div class="legend off" id="lg-m4"></div>
       <div class="note">Fuente: Mapa de Cobertura y Uso del Suelo de la Provincia de Córdoba 2024–2025 (IDECOR). Tocá el mapa para ver la clase.</div>
     </div>
@@ -139,13 +133,6 @@ const C = {
     'EDIFICADO NoPH': ['#1a7ae8','Edificado'],
     'EDIFICADO PH':   ['#782173','Edificado PH'],
     'ANP':            ['#3e7821','Área natural protegida']
-  },
-  actual: {
-    cantera:   ['#a6a6a6','Cantera'],
-    anp:       ['#5cd65c','Área natural protegida (ANP)'],
-    cons:      ['#ff9900','Urbanizado consolidado'],
-    nocons:    ['#ffe599','Urbanizado no consolidado'],
-    industria: ['#9900ff','Industria']
   },
   iplam: {
     'urbanizacion_consolidada': ['#3bcb88','Urbanización consolidada'],
@@ -211,8 +198,8 @@ Object.keys(bases).forEach((k, i) => {
 });
 L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
 
-// Panes para ordenar los mapas (IPLAM abajo, parcelas arriba, radio urbano encima de todo)
-[['m4', 405], ['m3', 410], ['m2', 420], ['m1', 430], ['radio', 450], ['labels', 460]].forEach(([n, z]) => {
+// Panes para ordenar los mapas (cobertura e IPLAM abajo, parcelas arriba, radio urbano encima de todo)
+[['m4', 405], ['m3', 410], ['m1', 430], ['radio', 450], ['labels', 460]].forEach(([n, z]) => {
   map.createPane(n).style.zIndex = z;
 });
 map.getPane('labels').style.pointerEvents = 'none';
@@ -239,19 +226,17 @@ const getJSON = u => fetch(u).then(r => { if (!r.ok) throw new Error(u); return 
 document.getElementById('lg-m1').innerHTML =
   Object.values(C.estado).map(([c, l]) => sw(c, l)).join('') +
   `<div class="li"><span class="sw circ">12</span>Número de manzana</div>`;
-document.getElementById('lg-m2').innerHTML = Object.values(C.actual).map(([c, l]) => sw(c, l)).join('');
 document.getElementById('lg-m3').innerHTML = Object.values(C.iplam).map(([c, l]) => sw(c, l)).join('');
 
 // ------------------------------------------------------------------ Capas
-const grupos = {m1: L.layerGroup(), m2: L.layerGroup(), m3: L.layerGroup(), m4: L.layerGroup()};
+const grupos = {m1: L.layerGroup(), m3: L.layerGroup(), m4: L.layerGroup()};
 let parcelas = [], manzanas = [];
 const etiquetas = L.layerGroup().addTo(map);
 
 Promise.all([
   getJSON('data/radio_urbano.geojson'), getJSON('data/parcelas.geojson'), getJSON('data/manzanas.geojson'),
-  getJSON('data/canteras.geojson'), getJSON('data/anp.geojson'), getJSON('data/residencial.geojson'),
-  getJSON('data/industria.geojson'), getJSON('data/iplam.geojson'), getJSON('data/cobertura_2024_2025.json')
-]).then(([radio, parc, mz, cant, anp, resid, ind, iplam, cob]) => {
+  getJSON('data/iplam.geojson'), getJSON('data/cobertura_2024_2025.json')
+]).then(([radio, parc, mz, iplam, cob]) => {
 
   // Radio urbano: siempre visible, en todos los mapas
   const radioLy = L.geoJSON(radio, {pane: 'radio', style: {renderer, color: '#ff3333', weight: 2.5, fill: false},
@@ -282,29 +267,7 @@ Promise.all([
     .map(f => ({ll: L.latLng(f.properties._ly, f.properties._lx), t: f.properties.parcela}));
   manzanas = mz.features.map(f => ({ll: L.latLng(f.properties._ly, f.properties._lx), t: f.properties.mz, n: f.properties.n_parcelas}));
 
-  // ---- Mapa 2: uso del suelo actual
-  L.geoJSON(anp, {pane: 'm2', style: fill(C.actual.anp[0], 0.6),
-    onEachFeature: (f, l) => { const p = f.properties; l.bindPopup(popup('Área natural protegida', [
-      ['Nombre', fmt(p.fna)], ['Categoría', fmt(p.gna)], ['Jurisdicción', fmt(p.caa)],
-      ['Administración', fmt(p.sag)], ['Dominio', fmt(p.dominio)], ['Superficie', fmt(p.ara) + ' ha'],
-      ['Año de creación', fmt(p.dct ? String(p.dct) : '')]])); }}).addTo(grupos.m2);
-  L.geoJSON(resid, {pane: 'm2',
-    style: f => fill(f.properties.Densidad === 'Consolidado' ? C.actual.cons[0] : C.actual.nocons[0], 0.75),
-    onEachFeature: (f, l) => l.bindPopup(popup('Área urbanizada', [
-      ['Uso', 'Residencial'],
-      ['Densidad', fmt(f.properties.Densidad)],
-      ['Categoría', f.properties.Densidad === 'Consolidado' ? C.actual.cons[1] : C.actual.nocons[1]]]))
-  }).addTo(grupos.m2);
-  L.geoJSON(ind, {pane: 'm2', style: fill(C.actual.industria[0], 0.75),
-    onEachFeature: (f, l) => l.bindPopup(popup('Industria', [['Uso', 'Industrial'], ['ID', fmt(f.properties.fid)]]))
-  }).addTo(grupos.m2);
-  L.geoJSON(cant, {pane: 'm2', style: fill(C.actual.cantera[0], 0.85),
-    onEachFeature: (f, l) => { const p = f.properties; l.bindPopup(popup('Cantera', [
-      ['Establecimiento', fmt(p.establecim)], ['Razón social', fmt(p.razon_soci)],
-      ['Actividad', fmt(p.actividad)], ['Material', fmt(p.material_s)],
-      ['RUAMI', fmt(p.ruami)], ['Expte. impacto ambiental', fmt(p.impacto_am)]])); }}).addTo(grupos.m2);
-
-  // ---- Mapa 3: IPLAM
+  // ---- Mapa 2: IPLAM
   L.geoJSON(iplam, {pane: 'm3',
     style: f => fill((C.iplam[f.properties.Categoria] || ['#db166f'])[0], 0.7),
     onEachFeature: (f, l) => { const p = f.properties; l.bindPopup(popup(
@@ -313,7 +276,7 @@ Promise.all([
       ['Superficie', fmt(p.Superficie, 2)],
       ['Descripción', fmt(p.Descripcio), 'desc']])); }}).addTo(grupos.m3);
 
-  // ---- Mapa 4: cobertura y uso actual del suelo 2024-2025 (ráster IDECOR reproyectado a Web Mercator)
+  // ---- Mapa 3: cobertura y uso actual del suelo 2024-2025 (ráster IDECOR reproyectado a Web Mercator)
   const fmtHa = v => v.toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' ha';
   const presentes = Object.keys(cob.stats).map(Number).sort((a, b) => a - b);
   let grp = '', html = '';
